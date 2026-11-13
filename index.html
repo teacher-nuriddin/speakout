@@ -71,8 +71,13 @@ label.f{display:block;margin:10px 0 4px;font-size:14px;color:var(--hint)}
 .ex{background:var(--sec);border-radius:var(--r);padding:14px;margin:12px 0}
 .ex .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .ex .instr{font-weight:600;margin:6px 0 2px}
-.ex .uz{color:var(--hint);font-size:13.5px;margin-bottom:10px}
+.ex .uz{color:var(--text);font-size:14px;margin:4px 0 10px;padding:6px 10px;border-radius:9px;background:color-mix(in srgb,var(--btn) 9%,transparent)}
 .ex .example{font-size:14px;color:var(--hint);background:var(--bg2);border-radius:10px;padding:7px 10px;margin:6px 0 10px}
+/* 1-bosqich: namuna tepada qotib turadi, katak ishorasi, ogohlantirish belgisi */
+.ex .example.stick{position:sticky;top:0;z-index:6;max-height:34vh;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.13);color:var(--text)}
+body.timed .ex .example.stick{top:48px}
+input::placeholder,textarea::placeholder{color:var(--hint);opacity:.8;font-size:13px}
+.need{outline:2px solid var(--warn)!important;outline-offset:1px}
 .passage{background:var(--bg2);border-radius:12px;padding:12px;font-size:15px;white-space:pre-line;margin:8px 0 12px}
 .passage b{display:block}
 .snake{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:17px;letter-spacing:1px}
@@ -467,6 +472,132 @@ const TYPE_HINT = {
   teacher: "Bu qism darsda o'tkaziladi. Ballni o'qituvchi qo'yadi.",
 };
 
+// ---------------------------------------------------------------- 1-bosqich: adashtirmaydigan shartlar
+// uz — o'zbekcha bir qatorlik izoh, ph — katak ishorasi, w — [min,max] so'z, ns — har bandda nechta gap.
+// Ma'lumot unit faylidan keladi (build.py → hints.py); yo'q bo'lsa — HINTS_BUILTIN dan; u ham bo'lmasa — mashq turidan avtomatik.
+const HINTS_BUILTIN = {"u3-3a-wb/1a":{"ph":"1–2 so'z","w":[1,2]},"u3-3a-wb/6c":{"ph":"1 so'z","w":[1,1]},"u3-3b-wb/1c":{"ph":"1 so'z","w":[1,1]},"u3-3b-wb/2b":{"ph":"1 so'z","w":[1,1]},"u3-3b-wb/4d":{"ph":"1 so'z","w":[1,1]},"u3-3b-gb/1":{"ph":"1 so'z","w":[1,1]},"u3-3b-gb/3":{"ph":"2–3 so'z","w":[2,3]},"u3-3c-wb/1a":{"ph":"1 so'z","w":[1,1]},"u3-3c-wb/1b":{"ph":"1 so'z","w":[1,1]},"u3-3c-wb/2c":{"ph":"gap"},"u3-3c-gb/2":{"ph":"1 so'z","w":[1,1]},"u3-3c-gb/3":{"ph":"gap"},"u3-test-a/5":{"ph":"1 so'z","w":[1,1]},"u3-test-b/5":{"ph":"1 so'z","w":[1,1]},"u4-4a-wb/2a":{"ph":"1 so'z","w":[1,1]},"u4-4a-gb/2":{"ph":"1 so'z","w":[1,1]},"u4-4a-vb/1c":{"ph":"1 so'z","w":[1,1]},"u4-4b-wb/3c":{"ph":"1–2 so'z","w":[1,3]},"u4-4b-gb/1":{"ph":"1–2 so'z","w":[1,2]},"u4-4b-gb/2":{"ph":"1–2 so'z","w":[1,3]},"u4-4c-wb/1a":{"ph":"1–3 so'z","w":[1,3]},"u4-4c-gb/3":{"ph":"1 so'z","w":[1,1]},"u4-4d-gb/3":{"ph":"qisqa gap"},"u4-4d-gb/5":{"ph":"gap"},"u4-review-34/2":{"ph":"1 so'z","w":[1,1]},"u4-review-34/5":{"ph":"1–2 so'z","w":[1,3]},"u4-review-34/9":{"ph":"1 so'z","w":[1,1]},"u4-test-a/2":{"ph":"1–2 so'z","w":[1,3]},"u4-test-a/8":{"ph":"1 so'z","w":[1,1]},"u4-test-b/2":{"ph":"1–2 so'z","w":[1,3]}};
+function exHints(ex) {
+  const b = HINTS_BUILTIN[((S.A && S.A.id) || '') + '/' + ex.id] || {};
+  const pick = k => (ex[k] !== undefined ? ex[k] : b[k]);
+  return { uz: pick('uz'), uzAdd: pick('uzAdd'), ph: pick('ph'), w: pick('w'), ns: pick('ns') };
+}
+const gapCls = id => String(id).replace(/^\d+/, '');
+function phFor(ex, id, optional) {
+  if (optional) return "kerak bo'lsa";
+  const p = exHints(ex).ph;
+  if (p && typeof p === 'object') return p[gapCls(id)] || '';
+  return p != null ? p : (ex.type === 'set' ? "1 so'z" : '');
+}
+function wFor(ex, id) {
+  const w = exHints(ex).w;
+  if (!w) return null;
+  return Array.isArray(w) ? w : (w[gapCls(id)] || null);
+}
+function needText(ph) { // "1 so'z" -> "faqat 1 ta so'z"
+  if (!ph || typeof ph !== 'string') return '';
+  let m;
+  if (ph === "1 so'z") return "faqat 1 ta so'z";
+  if ((m = ph.match(/^(\d+(?:–\d+)?) so'z$/))) return m[1] + " ta so'z";
+  if (ph === 'gap') return "to'liq gap";
+  if (ph === 'qisqa gap') return 'qisqa gap';
+  if ((m = ph.match(/^(\d+) ta gap$/))) return m[1] === '2' ? 'ikkita gap' : ph;
+  return '';
+}
+function uzAuto(ex, h) {
+  const t = ex.type, ins = String(ex.instruction || '');
+  if (t === 'gap') {
+    const gaps = ex.gaps || [], req = gaps.filter(g => !g.optional);
+    const inp = req.filter(g => g.kind === 'input'), sel = req.filter(g => g.kind === 'select'), box = req.filter(g => g.kind === 'box');
+    const parts = [];
+    const per = (ex.lines || []).map(l => (l.match(/\{\{[^}]+\}\}/g) || []).length).filter(Boolean);
+    if (per.length > 1 && per[0] > 1 && per.every(x => x === per[0])) parts.push(`Har bir bandda ${per[0]} ta katak bor — hammasini to'ldiring.`);
+    if (inp.length && inp.every(g => g.prefix)) {
+      parts.push(/whole word/i.test(ins) ? "Har katakka so'zni to'liq yozing (berilgan harflar bilan birga)." : "Birinchi harf berilgan — har katakka so'zning davomini yozing (1 ta so'z).");
+    } else if (inp.length) {
+      const n = needText(typeof h.ph === 'string' ? h.ph : '');
+      parts.push((sel.length || box.length ? 'Yoziladigan kataklarga ' : 'Har bir katakka ') + (n || 'javobni') + ' yozing.');
+    }
+    if (sel.length) parts.push(inp.length || box.length ? "Ro'yxatli kataklarda to'g'ri variantni tanlang." : "Har bir katakni bosib, ro'yxatdan to'g'ri variantni tanlang.");
+    if (box.length) parts.push("Yuqoridagi so'zlardan mosini katakdagi ro'yxatdan tanlang.");
+    if (gaps.some(g => g.optional)) parts.push("«kerak bo'lsa» katagini faqat kerak bo'lganda to'ldiring, aks holda bo'sh qoldiring.");
+    return parts.join(' ');
+  }
+  if (t === 'mcq') {
+    const all = new Set();
+    (ex.items || []).forEach(it => (it.options || ex.options || []).forEach(o => all.add(String(o).toLowerCase())));
+    if (all.size && [...all].every(o => ['t', 'f', 'true', 'false'].includes(o))) return "Har bir gap uchun T (to'g'ri) yoki F (noto'g'ri) ni bosing.";
+    return "Har bir savolda bitta to'g'ri variantni bosing.";
+  }
+  if (t === 'match') return "Har bir band uchun ro'yxatdan mos javobni tanlang." + ((ex.items || []).some(it => it.image) || ex.image ? ' Rasmni kattalashtirish uchun ustiga bosing.' : '');
+  if (t === 'text') {
+    if ((ex.items || []).some(it => it.prefill)) return "Tayyor yozilgan gapni o'zgartirib, to'g'ri shaklini yozing.";
+    const n = needText(typeof h.ph === 'string' ? h.ph : '');
+    return n ? `Har bir bandga ${n} yozing.` : 'Javobni yozing.';
+  }
+  if (t === 'set') return `${ex.count} ta so'z yozing — har katakka bittadan.`;
+  if (t === 'writing') {
+    const many = /(<br>|\n)\s*1\s/.test(ins); // 1, 2, 3 … savollar bitta katakka
+    return (many ? "Hamma bandlarga (1, 2, 3 …) shu bitta katakka, raqamlab javob yozing." : "Erkin yozma ish.") +
+      (ex.minWords ? ` ${ex.minWords}–${ex.maxWords} ta so'z.` : '') + " Uni o'qituvchi tekshiradi.";
+  }
+  return TYPE_HINT[t] || '';
+}
+function uzLine(ex) { const h = exHints(ex); return [h.uz || uzAuto(ex, h), h.uzAdd].filter(Boolean).join(' '); }
+
+// topshirishdan oldin: bo'sh kataklar, so'z soni, gaplar soni (baho qo'ymaydi — faqat so'raydi)
+const wordCount = s => String(s).split(/\s+/).filter(x => /[A-Za-z0-9]/.test(x)).length;
+const sentCount = s => String(s).split(/[.!?]+/).filter(x => /[A-Za-z]/.test(x)).length;
+function exIssues(ex) {
+  const r = { ex, empty: 0, words: [], sents: [], nodes: [] };
+  const el = $('#ex-' + CSS.escape(ex.id));
+  if (!el || !ex.active || !$('.body', el) || ex.type === 'info' || ex.type === 'teacher' || ex.left === 0) return r;
+  collect(ex);
+  const a = S.answers[ex.id] || {};
+  const blank = v => v == null || (Array.isArray(v) ? !v.some(x => String(x).trim()) : !String(v).trim());
+  if (ex.type === 'set') { $$('[data-set]', el).forEach(i => { if (!i.value.trim()) { r.empty++; r.nodes.push(i); } }); return r; }
+  if (ex.type === 'writing') { if (blank(a['1'])) { r.empty++; r.nodes.push($('textarea', el)); } return r; }
+  if (ex.type === 'multi') return r; // hech narsani belgilamaslik ham javob bo'lishi mumkin
+  const h = exHints(ex);
+  const fields = ex.type === 'gap' ? (ex.gaps || []).filter(g => !g.optional) : (ex.items || []);
+  fields.forEach(f => {
+    let node = $(`[data-i="${CSS.escape(f.id)}"]`, el) || $(`[data-hl="${CSS.escape(f.id)}"]`, el);
+    if (node && node.type === 'hidden') node = $('[data-ans]', node.closest('.q'));
+    const v = a[f.id];
+    if (blank(v)) { r.empty++; r.nodes.push(node); return; }
+    if (!((ex.type === 'gap' && f.kind === 'input') || (ex.type === 'text' && !f.prefill))) return;
+    const w = wFor(ex, f.id), n = wordCount(v);
+    if (h.ns > 1 && sentCount(v) < h.ns) { r.sents.push(f.id); r.nodes.push(node); }
+    else if (w && (n < w[0] || n > w[1])) { r.words.push(f.id); r.nodes.push(node); }
+  });
+  return r;
+}
+const fewIds = a => a.slice(0, 3).join(', ') + (a.length > 3 ? ' …' : '');
+async function preCheck(list, verb, plain) {
+  $$('.need').forEach(n => n.classList.remove('need'));
+  const rs = list.map(exIssues);
+  rs.forEach(r => r.nodes.forEach(n => n && n.classList.add('need')));
+  const empty = rs.reduce((t, r) => t + r.empty, 0);
+  const lines = [];
+  if (empty) lines.push(`Bo'sh kataklar qoldi: ${empty} ta.`);
+  if (rs.length === 1) {
+    const r = rs[0], h = exHints(r.ex);
+    if (r.sents.length) lines.push(`${r.ex.example ? 'Namunada' : 'Shartga ko\'ra'} har bandda ${h.ns} ta gap bor — siz ${fewIds(r.sents)}-bandda kamroq yozdingiz.`);
+    if (r.words.length) {
+      const ph = phFor(r.ex, r.words[0]), p = ph ? ` (kerak: ${ph})` : '';
+      lines.push(`${fewIds(r.words)}-katakda so'zlar soni mos emas${p}.`);
+    }
+  } else {
+    const bad = rs.reduce((t, r) => t + r.words.length + r.sents.length, 0);
+    if (bad) lines.push(`So'zlar yoki gaplar soni mos emas: ${bad} ta katak.`);
+  }
+  if (!lines.length) return plain ? confirmAsk(plain) : true;
+  let msg = lines.join('\n') + `\nBaribir ${verb}?`;
+  if (msg.length > 250) msg = msg.slice(0, 230) + `…\nBaribir ${verb}?`; // Telegram oynasi 256 belgidan oshmasin
+  const ok = await confirmAsk(msg);
+  if (!ok) { const n = rs.flatMap(r => r.nodes).find(Boolean); if (n) n.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  return ok;
+}
+
 function rng(seedStr) {
   let h = 1779033703 ^ seedStr.length;
   for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
@@ -486,6 +617,7 @@ async function assignmentPage(id) {
   const draft = loadDraft(id);
   S.answers = {};
   const timed = A.settings.timeLimit > 0;
+  document.body.classList.toggle('timed', !!timed);
   const whole = timed || A.kind === 'quiz' || A.kind === 'test';
   A.whole = whole;
   let h = '';
@@ -515,7 +647,7 @@ async function assignmentPage(id) {
   hydrateImages();
   A.exercises.forEach(ex => bindExercise(ex, A));
   if (timed && canAll) setupTimer(A);
-  else if (whole && canAll) $('#submitAll').onclick = async () => { if (await confirmAsk("Hamma javoblarni topshirasizmi? Keyin o'zgartirib bo'lmaydi.")) submitAll(false); };
+  else if (whole && canAll) $('#submitAll').onclick = async () => { if (await preCheck(S.A.exercises, 'topshirasizmi', "Hamma javoblarni topshirasizmi? Keyin o'zgartirib bo'lmaydi.")) submitAll(false); };
 }
 
 function startScreen(A) {
@@ -544,7 +676,7 @@ function setupTimer(A) {
     if (left <= 0) { clearInterval(S.timer); submitAll(true); }
   };
   tick(); S.timer = setInterval(tick, 1000);
-  $('#submitAll').onclick = async () => { if (await confirmAsk('Hamma javoblarni topshirasizmi? Keyin o\'zgartirib bo\'lmaydi.')) submitAll(false); };
+  $('#submitAll').onclick = async () => { if (await preCheck(S.A.exercises, 'topshirasizmi', "Hamma javoblarni topshirasizmi? Keyin o'zgartirib bo'lmaydi.")) submitAll(false); };
 }
 async function submitAll(auto) {
   const A = S.A;
@@ -567,12 +699,12 @@ function exHeader(ex) {
 function renderExercise(ex, A) {
   let h = `<div class="ex" id="ex-${esc(ex.id)}">${exHeader(ex)}`;
   if (!ex.active) return h + `<div class="instr">${rich(ex.instruction)}</div><div class="notice">${esc(ex.inactiveReason)}</div></div>`;
-  h += `<div class="instr">${rich(ex.instruction)}</div><div class="uz">${TYPE_HINT[ex.type] || ''}</div>`;
+  h += `<div class="instr">${rich(ex.instruction)}</div><div class="uz">👉 ${rich(uzLine(ex))}</div>`;
   if (ex.requires && !A.exercises.some(e => e.id === ex.requires && e.used > 0)) {
     return h + `<div class="notice">🔒 Avval <b>${esc(ex.requires.toUpperCase())}</b> mashqini topshiring — bu mashq unga bog'liq.</div></div>`;
   }
   if (ex.audio) h += `<div class="audio" data-audio="${esc(ex.audio)}"><button class="btn sec sm">▶ Audio ${esc(ex.audio)} ni yuklash</button></div>`;
-  if (ex.example) h += `<div class="example">Namuna: ${rich(ex.example)}</div>`;
+  if (ex.example) h += `<div class="example stick">Namuna: ${rich(ex.example)}</div>`;
   if (ex.text) h += `<div class="passage">${rich(ex.text)}</div>`;
   if (ex.image) h += `<img class="pic" data-media="${esc(ex.image)}" alt="">`;
   if (ex.box) h += `<div class="box">${ex.box.map(b => `<span>${esc(b)}</span>`).join('')}</div>`;
@@ -593,7 +725,7 @@ function renderBody(ex) {
         const opts = g.kind === 'box' ? ex.box : g.options;
         return `<select data-i="${esc(gid)}"><option value="">${esc(gid)} …</option>${opts.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
       }
-      return `<sup>${esc(gid)}</sup>${g.prefix ? `<span class="pre">${esc(g.prefix)}</span>` : ''}<input data-i="${esc(gid)}" value="${esc(v)}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:${g.prefix ? 120 : 110}px">`;
+      return `<sup>${esc(gid)}</sup>${g.prefix ? `<span class="pre">${esc(g.prefix)}</span>` : ''}<input data-i="${esc(gid)}" value="${esc(v)}" placeholder="${esc(phFor(ex, gid, g.optional))}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:${g.prefix ? 120 : 110}px">`;
     })}</div>`).join('');
   }
   if (t === 'mcq' || t === 'match') {
@@ -613,8 +745,8 @@ function renderBody(ex) {
   if (t === 'text') {
     return ex.items.map(it => {
       const v = ans[it.id] != null ? ans[it.id] : (it.prefill || '');
-      const field = ex.long ? `<textarea data-i="${esc(it.id)}" rows="2" autocapitalize="sentences" spellcheck="false">${esc(v)}</textarea>`
-        : `<input data-i="${esc(it.id)}" value="${esc(v)}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
+      const field = ex.long ? `<textarea data-i="${esc(it.id)}" rows="2" placeholder="${esc(phFor(ex, it.id))}" autocapitalize="sentences" spellcheck="false">${esc(v)}</textarea>`
+        : `<input data-i="${esc(it.id)}" value="${esc(v)}" placeholder="${esc(phFor(ex, it.id))}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
       return `<div class="q ${ex.long ? '' : 'inl'}" data-q="${esc(it.id)}"><div class="p"><span class="num">${esc(it.id)}</span>${rich(it.prompt || '')}</div>${field}<div class="mk"></div></div>`;
     }).join('');
   }
@@ -640,7 +772,7 @@ function renderBody(ex) {
   if (t === 'set') {
     const list = [].concat(ans['1'] || []);
     let h = '<div class="q" data-q="1">';
-    for (let i = 0; i < ex.count; i++) h += `<div class="row" style="margin:5px 0"><span class="num">${i + 1}</span><input data-set="${i}" value="${esc(list[i] || '')}" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="sm-mk"></span></div>`;
+    for (let i = 0; i < ex.count; i++) h += `<div class="row" style="margin:5px 0"><span class="num">${i + 1}</span><input data-set="${i}" value="${esc(list[i] || '')}" placeholder="${esc(phFor(ex, '1'))}" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="sm-mk"></span></div>`;
     return h + '<div class="mk"></div></div>';
   }
   if (t === 'highlight') {
@@ -686,6 +818,13 @@ function bindExercise(ex, A) {
   $$('.opts[data-multi] .opt', el).forEach(o => (o.onclick = () => { if (locked) return; o.classList.toggle('sel'); changed(); }));
   $$('.hl', el).forEach(o => (o.onclick = () => { if (locked) return; o.classList.toggle('sel'); changed(); }));
   $$('input,select,textarea', el).forEach(i => { i.addEventListener('input', changed); i.addEventListener('change', changed); if (locked) i.disabled = true; });
+  el.addEventListener('input', e => { const q = e.target.closest('.need') || e.target; q.classList.remove('need'); });
+  el.addEventListener('click', e => { const q = e.target.closest('.need'); if (q) q.classList.remove('need'); });
+  const stick = $('.example.stick', el);
+  if (stick) el.addEventListener('focusin', e => setTimeout(() => {
+    const r = e.target.getBoundingClientRect(), s = stick.getBoundingClientRect();
+    if (e.target !== stick && r.top < s.bottom + 4 && r.bottom > s.top) window.scrollBy({ top: r.top - s.bottom - 12, behavior: 'smooth' });
+  }, 350));
   // so'z tartibi
   $$('.q', el).forEach(q => {
     const src = $('[data-src]', q), dst = $('[data-ans]', q), hid = $('input[type=hidden]', q);
@@ -753,8 +892,7 @@ async function submitOne(ex, A) {
   const a = S.answers[ex.id] || {};
   const filled = Object.values(a).filter(v => (Array.isArray(v) ? v.some(x => x !== '' && x != null) : String(v).trim() !== '')).length;
   if (!filled) { toast('Avval javob bering.'); return; }
-  const expect = ex.type === 'set' ? 1 : (ex.gaps || ex.items || [1]).length;
-  if (filled < expect && ex.type !== 'multi' && !(await confirmAsk("Hamma savolga javob bermadingiz. Baribir tekshirasizmi?"))) return;
+  if (!(await preCheck([ex], 'tekshirasizmi'))) return;
   if (ex.type === 'writing') {
     const n = (String(a['1'] || '').match(/\S+/g) || []).length;
     if (ex.minWords && n < ex.minWords && !(await confirmAsk(`Siz ${n} ta so'z yozdingiz (kerak: ${ex.minWords}+). Baribir yuborasizmi?`))) return;
