@@ -2,6 +2,7 @@
 <html lang="uz">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer"><!-- Google talaffuz ovozi boshqa saytdan kelgan so'rovni rad etmasligi uchun -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Speakout A1 — uy vazifasi</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -136,6 +137,7 @@ td.c-full{background:var(--okbg)}td.c-mid{background:var(--warnbg)}td.c-low{back
 .fcard .w{font-size:30px;font-weight:800}
 .fcard .pr{color:var(--hint);margin-top:4px}
 .fcard .exs{margin-top:14px;font-style:italic}
+.say{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;margin-left:4px;vertical-align:middle;font-style:normal}
 .fcard .tr{margin-top:14px;font-size:22px;font-weight:700;color:var(--btn)}
 .tabs{display:flex;gap:6px;background:var(--bg2);padding:4px;border-radius:12px;margin:8px 0}
 .tabs button{flex:1;border:0;background:none;padding:8px;border-radius:9px;font:600 14px inherit;color:var(--hint);cursor:pointer}
@@ -161,6 +163,70 @@ const rich = s => esc(s).replace(/&lt;(\/?)(b|i|u)&gt;/g, '<$1$2>').replace(/&lt
 const app = $('#app');
 const S = { me: null, view: 'student', stack: [], tab: 'home', overview: null, group: '' };
 
+// so'z talaffuzi. Android Telegram'da telefon ovozi (Web Speech API) yo'q, shuning uchun:
+// Android yoki telefon ovozi bo'lmasa -> Google Tarjimon ovozi (faqat inglizcha matn yuboriladi), aks holda telefonning o'z ingliz ovozi.
+let VOICE = null;
+function pickVoice() {
+  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+  const good = v => /google|enhanced|premium|natural|neural/i.test(v.name || '');
+  const pick = re => vs.find(v => re.test(v.lang) && good(v)) || vs.find(v => re.test(v.lang));
+  VOICE = pick(/^en[-_]GB/i) || pick(/^en[-_]US/i) || pick(/^en/i) || null;
+}
+if (window.speechSynthesis) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+const IS_ANDROID = /android/i.test(navigator.userAgent || '');
+function localVoiceOk() {
+  if (IS_ANDROID || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
+  if (!VOICE) pickVoice();
+  return !!VOICE;
+}
+function sayLocal(text) {
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = VOICE; u.lang = VOICE.lang; u.rate = 0.8;
+  speechSynthesis.speak(u);
+}
+// Google ovozi: uzun matn 180 belgidan bo'laklarga bo'linadi; ovoz oldindan yuklab qo'yiladi (keshda saqlanadi)
+const TTS_CACHE = {};
+function ttsChunks(text) {
+  const out = []; let cur = '';
+  String(text).split(/(?<=[.,;:!?])\s+|\s+/).forEach(w => {
+    if ((cur + ' ' + w).trim().length > 180) { if (cur) out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim();
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+function ttsAudios(text) {
+  if (!TTS_CACHE[text]) TTS_CACHE[text] = ttsChunks(text).map(c => {
+    const au = new Audio('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en-GB&q=' + encodeURIComponent(c));
+    au.preload = 'auto';
+    return au;
+  });
+  return TTS_CACHE[text];
+}
+let PLAYING = null;
+function sayGoogle(text) {
+  if (PLAYING) PLAYING.forEach(a => { a.pause(); a.onended = null; });
+  const list = ttsAudios(text); PLAYING = list;
+  const fail = () => {
+    delete TTS_CACHE[text];
+    if (window.speechSynthesis && window.SpeechSynthesisUtterance && VOICE) sayLocal(text);
+    else toast("Ovozni yuklab bo'lmadi. Internetni tekshirib, qayta bosing.");
+  };
+  const play = i => {
+    const au = list[i]; if (!au) return;
+    au.onended = () => play(i + 1); au.onerror = fail;
+    au.playbackRate = 0.9;
+    try { au.currentTime = 0; } catch (e) {}
+    const pr = au.play(); if (pr && pr.catch) pr.catch(fail);
+  };
+  play(0);
+}
+function preloadSay(texts) { if (!localVoiceOk()) texts.filter(Boolean).forEach(t => ttsAudios(t)); }
+function say(text, ev) {
+  if (ev) ev.stopPropagation();
+  if (!text) return;
+  if (localVoiceOk()) sayLocal(text); else sayGoogle(text);
+}
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.style.display = 'none'), ms);
@@ -784,11 +850,13 @@ function renderCard() {
   const d = S.W; const w = d.words[d.i]; if (!w) return;
   const p = d.progress[w.en];
   $('#wbody').innerHTML = `<div class="hint center small">${d.i + 1} / ${d.words.length} ${p && p.st >= 2 ? '· ✅ bilasiz' : ''}</div>
-    <div class="flash"><div class="fcard" id="fc"><div class="w">${esc(w.en)}</div><div class="pr">${esc(w.pron || '')}</div>
-    <div class="exs">${esc(w.ex || '')}</div><div class="tr" id="tr" style="visibility:hidden">${esc(w.uz)}</div>
+    <div class="flash"><div class="fcard" id="fc"><div class="w">${esc(w.en)}<button class="say" data-say="w" aria-label="Tinglash">🔊</button></div><div class="pr">${esc(w.pron || '')}</div>
+    <div class="exs">${esc(w.ex || '')}${w.ex ? '<button class="say" data-say="ex" aria-label="Tinglash">🔊</button>' : ''}</div><div class="tr" id="tr" style="visibility:hidden">${esc(w.uz)}</div>
     <div class="hint small" style="margin-top:10px" id="tap">Tarjimani ko'rish uchun bosing</div></div></div>
     <div class="row"><button class="btn sec grow" id="prev">← Oldingi</button><button class="btn grow" id="next">Keyingi →</button></div>`;
   $('#fc').onclick = () => { $('#tr').style.visibility = 'visible'; $('#tap').style.display = 'none'; };
+  $$('#fc .say').forEach(b => (b.onclick = e => say(b.dataset.say === 'w' ? w.en : w.ex, e)));
+  preloadSay([w.en, w.ex]);
   $('#prev').onclick = () => { d.i = (d.i - 1 + d.words.length) % d.words.length; renderCard(); };
   $('#next').onclick = () => { d.i = (d.i + 1) % d.words.length; renderCard(); };
 }
